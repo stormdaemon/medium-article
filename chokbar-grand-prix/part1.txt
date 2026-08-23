@@ -1,0 +1,130 @@
+<div class="comic-rule"></div>
+    <div class="tiny">CHOISIS TON CHOKBAR — les différences de stats restent légères : le vrai talent, c'est de pousser les autres dans le mobilier urbain.</div>
+    <div id="drivers" class="drivers"></div>
+    <div class="buttons">
+      <button id="startBtn" class="primary">Lancer le Grand Prix</button>
+      <button id="soundBtn">Son : ON</button>
+    </div>
+  </div>
+</div>
+
+<div id="results" class="screen">
+  <div class="panel">
+    <div class="subtitle" id="resultTrack">Résultat</div>
+    <div id="placeText" class="bigPlace">1ER</div>
+    <div class="gpDots" id="gpDots"></div>
+    <div class="comic-rule"></div>
+    <table class="resultsTable">
+      <thead><tr><th>#</th><th>Pilote</th><th>Course</th><th>GP</th></tr></thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+    <div class="buttons"><button class="primary" id="nextBtn">Course suivante</button></div>
+  </div>
+</div>
+
+<div id="gpEnd" class="screen">
+  <div class="panel">
+    <div class="subtitle">Classement final</div>
+    <h2 class="title" style="font-size:clamp(44px,10vw,86px)">GRAND PRIX<br>TERMINÉ</h2>
+    <div class="comic-rule"></div>
+    <table class="resultsTable"><tbody id="finalBody"></tbody></table>
+    <div class="buttons">
+      <button class="primary" id="againBtn">Rejouer</button>
+      <button id="menuBtn">Changer de pilote</button>
+    </div>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="hudTop">
+    <div class="badge"><small>Position</small><strong id="posHud">1/12</strong></div>
+    <div class="badge" style="text-align:center"><small id="trackHud">Course 1/5</small><strong id="speedHud">0</strong><small>km/h</small></div>
+    <div class="badge" style="text-align:right"><small>Progression</small><strong id="progressHud">0%</strong></div>
+  </div>
+  <div class="boostWrap"><div id="boostFill" class="boostFill"></div><div class="boostLabel">BOOST CHOKBAR</div></div>
+  <div class="help">← → / A D : direction<br>ESPACE : boost</div>
+</div>
+
+<div id="controls" class="controls">
+  <div class="ctrlGroup">
+    <div class="ctrl" data-control="left">◀</div>
+    <div class="ctrl" data-control="right">▶</div>
+  </div>
+  <div class="ctrlGroup"><div class="ctrl boost" data-control="boost">BOOST</div></div>
+</div>
+
+<div id="impactLayer"></div>
+<div id="countdown">3</div>
+
+<script>
+(() => {
+'use strict';
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const menu = document.getElementById('menu');
+const results = document.getElementById('results');
+const gpEnd = document.getElementById('gpEnd');
+const hud = document.getElementById('hud');
+const controls = document.getElementById('controls');
+const countdownEl = document.getElementById('countdown');
+const impactLayer = document.getElementById('impactLayer');
+
+let W=innerWidth,H=innerHeight,DPR=Math.min(2,devicePixelRatio||1);
+function resize(){
+  W=innerWidth; H=innerHeight; DPR=Math.min(2,devicePixelRatio||1);
+  canvas.width=W*DPR; canvas.height=H*DPR;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize',resize,{passive:true}); resize();
+
+const drivers = [
+  {name:'Chokbar Prime',face:'😎',tag:'Le standard homologué nulle part',car:'#ffd62e',accent:'#111',spd:1.00,turn:1.00},
+  {name:'Kéké Chrome',face:'🕶️',tag:'Spoiler plus cher que la voiture',car:'#cfd8dc',accent:'#ff3a2f',spd:1.015,turn:.98},
+  {name:'Momo Turbo',face:'🤨',tag:'Le rupteur comme langage maternel',car:'#ff3a2f',accent:'#fff44a',spd:1.01,turn:.99},
+  {name:'Nono Pare-Choc',face:'🥴',tag:'Freiner est une opinion',car:'#29a7ff',accent:'#fff',spd:.99,turn:1.02},
+  {name:'Bébert NOS',face:'😤',tag:'Trois bouteilles. Aucun contrôle.',car:'#6d4cff',accent:'#53df77',spd:1.02,turn:.97},
+  {name:'Jojo Néon',face:'🤩',tag:'Visible depuis la stratosphère',car:'#ff49c7',accent:'#29a7ff',spd:1.00,turn:1.01},
+  {name:'Tonton Slick',face:'🧢',tag:'Pneus lisses, cerveau pareil',car:'#53df77',accent:'#111',spd:.985,turn:1.03},
+  {name:'Marco VTEC',face:'😏',tag:'Attends que le VTEC se déclenche',car:'#ff7a1a',accent:'#111',spd:1.012,turn:.99},
+  {name:'Dédé Carbone',face:'🧐',tag:'−12 kg, +40 autocollants',car:'#222',accent:'#ffd62e',spd:1.018,turn:.975},
+  {name:'Rico Jantes',face:'😁',tag:'19 pouces de mauvaise décision',car:'#00c6b7',accent:'#111',spd:.995,turn:1.015},
+  {name:'Patoche GTI',face:'😬',tag:'Toujours chaud, jamais assuré',car:'#f4f4f4',accent:'#e32020',spd:1.005,turn:1.00},
+  {name:'Chips Racing',face:'🤪',tag:'Aucune stratégie, beaucoup d’élan',car:'#9b59ff',accent:'#fff',spd:.99,turn:1.025}
+];
+
+const tracks = [
+  {name:'CENTRE-VILLE',sky:'#80cbff',ground:'#9b9b89',length:8500,seed:1,curve:1.00,build:'#e8c69c'},
+  {name:'ROCADE DU SOIR',sky:'#ff9f78',ground:'#6f786e',length:9000,seed:7,curve:1.12,build:'#d8d2c4'},
+  {name:'QUAIS EXPRESS',sky:'#73d6da',ground:'#8a8c7f',length:9200,seed:13,curve:.92,build:'#e0aa7b'},
+  {name:'ZONE INDUSTRIELLE',sky:'#b7c8d4',ground:'#7c8076',length:9600,seed:21,curve:1.23,build:'#c8c8c1'},
+  {name:'FINALE CHOKBAR',sky:'#98b8ff',ground:'#87806d',length:10000,seed:31,curve:1.34,build:'#d8b58f'}
+];
+
+let selected=0;
+let raceIndex=0;
+let state='menu';
+let player=null;
+let racers=[];
+let traffic=[];
+let standings=drivers.map((d,i)=>({i,pts:0}));
+let raceResult=[];
+let lastT=performance.now();
+let raceStartAt=0;
+let countdown=0;
+let collisionCooldown=0;
+let shake=0;
+let flash=0;
+let soundOn=true;
+let audioCtx=null;
+const input={left:false,right:false,boost:false};
+
+const driversEl=document.getElementById('drivers');
+function buildDriverCards(){
+  driversEl.innerHTML='';
+  drivers.forEach((d,i)=>{
+    const el=document.createElement('div');
+    el.className='driver'+(i===selected?' selected':'');
+    el.innerHTML=`<div class="face">${d.face}</div><div class="name">${d.name}</div><div class="tag">${d.tag}</div>
+      <div class="bars"><div class="bar"><i style="width:${72+(d.spd-.98)*800}%"></i></div><div class="bar"><i style="width:${72+(d.turn-.97)*6
