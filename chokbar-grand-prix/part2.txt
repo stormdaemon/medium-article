@@ -1,0 +1,146 @@
+80}%"></i></div></div>`;
+    el.onclick=()=>{selected=i; buildDriverCards();};
+    driversEl.appendChild(el);
+  });
+}
+buildDriverCards();
+
+function initAudio(){
+  if(!soundOn)return;
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+function blip(freq=120,dur=.08,type='square',vol=.05){
+  if(!soundOn)return;
+  initAudio();
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type;o.frequency.value=freq;g.gain.value=vol;
+  o.connect(g);g.connect(audioCtx.destination);o.start();
+  g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+dur);
+  o.stop(audioCtx.currentTime+dur);
+}
+function impactSound(){blip(82,.13,'sawtooth',.09);setTimeout(()=>blip(55,.11,'square',.06),35)}
+function boostSound(){blip(180,.11,'sawtooth',.035)}
+
+document.getElementById('soundBtn').onclick=()=>{
+  soundOn=!soundOn; document.getElementById('soundBtn').textContent='Son : '+(soundOn?'ON':'OFF'); initAudio();
+};
+
+function resetGP(){
+  raceIndex=0;
+  standings=drivers.map((d,i)=>({i,pts:0}));
+}
+document.getElementById('startBtn').onclick=()=>{initAudio();resetGP();startRace();};
+document.getElementById('nextBtn').onclick=()=>{raceIndex++; if(raceIndex<tracks.length)startRace(); else showFinal();};
+document.getElementById('againBtn').onclick=()=>{resetGP();startRace();};
+document.getElementById('menuBtn').onclick=()=>{gpEnd.classList.remove('show');menu.classList.add('show');state='menu';};
+
+function seeded(n){return Math.abs(Math.sin(n*12.9898+78.233)*43758.5453)%1}
+function curveAt(z,track){
+  const s=track.seed;
+  return (
+    Math.sin(z/720+s)*.58 +
+    Math.sin(z/1430+s*1.7)*.72 +
+    Math.sin(z/310+s*.31)*.12
+  )*track.curve;
+}
+
+function startRace(){
+  menu.classList.remove('show');results.classList.remove('show');gpEnd.classList.remove('show');
+  hud.classList.add('show');controls.classList.add('show');
+  state='countdown';
+  const d=drivers[selected];
+  player={driver:selected,dist:0,x:0,speed:0,boost:32,finishTime:null,spd:d.spd,turn:d.turn};
+  racers=[];
+  drivers.forEach((drv,i)=>{
+    if(i===selected)return;
+    const row=racers.length;
+    racers.push({
+      driver:i,
+      dist: 35 + row*13 + seeded(i+raceIndex*10)*20,
+      x: [-.56,-.18,.18,.56][row%4] + (seeded(i*3.3)-.5)*.08,
+      targetX:0,
+      speed:(202 + seeded(i*9+raceIndex*17)*24)*drv.spd,
+      baseSpeed:0,
+      finished:false,
+      finishTime:null,
+      laneTimer:1+seeded(i)*2
+    });
+  });
+  racers.forEach(r=>r.baseSpeed=r.speed);
+  traffic=[];
+  for(let i=0;i<13;i++){
+    traffic.push({
+      dist:650+i*620+seeded(i+44)*300,
+      x:[-.62,-.2,.2,.62][i%4],
+      speed:105+seeded(i+91)*38,
+      color:['#e9e9e9','#1c2734','#b8c2cc','#9c2f2f','#375e97'][i%5],
+      hit:0
+    });
+  }
+  collisionCooldown=0;shake=0;flash=0;
+  raceStartAt=performance.now()+3100;
+  countdown=3;
+  countdownEl.textContent='3'; countdownEl.classList.add('show');
+  document.getElementById('trackHud').textContent=`Course ${raceIndex+1}/5 · ${tracks[raceIndex].name}`;
+  setTimeout(()=>{if(state==='countdown'){countdown=2;countdownEl.textContent='2';blip(220,.08)}},900);
+  setTimeout(()=>{if(state==='countdown'){countdown=1;countdownEl.textContent='1';blip(280,.08)}},1800);
+  setTimeout(()=>{if(state==='countdown'){countdownEl.textContent='GO!';blip(520,.18,'square',.08)}},2600);
+  setTimeout(()=>{if(state==='countdown'){state='race';countdownEl.classList.remove('show')}},3200);
+}
+
+function pointsForPlace(p){return [12,10,8,7,6,5,4,3,2,1,0,0][p-1]||0}
+
+function finishRace(){
+  if(state!=='race')return;
+  state='results';
+  hud.classList.remove('show');controls.classList.remove('show');
+  const now=(performance.now()-raceStartAt)/1000;
+  const all=[{driver:selected,dist:player.dist,finishTime:now,me:true},...racers.map(r=>({
+    driver:r.driver,dist:r.dist,finishTime:r.finishTime,me:false
+  }))];
+  all.sort((a,b)=>{
+    const af=a.finishTime??9999,bf=b.finishTime??9999;
+    if(a.finishTime!=null||b.finishTime!=null)return af-bf;
+    return b.dist-a.dist;
+  });
+  raceResult=all;
+  all.forEach((r,idx)=>{
+    const s=standings.find(x=>x.i===r.driver);
+    s.pts+=pointsForPlace(idx+1);
+  });
+  setTimeout(()=>showResults(),450);
+}
+
+function showResults(){
+  results.classList.add('show');
+  const myPlace=raceResult.findIndex(r=>r.driver===selected)+1;
+  document.getElementById('resultTrack').textContent=`${tracks[raceIndex].name} · COURSE ${raceIndex+1}/5`;
+  document.getElementById('placeText').textContent=myPlace===1?'1ER':myPlace+'E';
+  document.getElementById('gpDots').innerHTML=tracks.map((_,i)=>`<i class="${i<=raceIndex?'done':''}"></i>`).join('');
+  const sortedGP=[...standings].sort((a,b)=>b.pts-a.pts);
+  const tbody=document.getElementById('resultsBody');tbody.innerHTML='';
+  raceResult.forEach((r,idx)=>{
+    const tr=document.createElement('tr'); if(r.driver===selected)tr.className='me';
+    const gp=sortedGP.findIndex(s=>s.i===r.driver)+1;
+    tr.innerHTML=`<td>${idx+1}</td><td>${drivers[r.driver].face} ${drivers[r.driver].name}</td><td>+${pointsForPlace(idx+1)}</td><td>${standings.find(s=>s.i===r.driver).pts} pts · #${gp}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('nextBtn').textContent=raceIndex===tracks.length-1?'Classement final':'Course suivante';
+}
+
+function showFinal(){
+  state='final';
+  results.classList.remove('show');gpEnd.classList.add('show');
+  const sorted=[...standings].sort((a,b)=>b.pts-a.pts);
+  const body=document.getElementById('finalBody');body.innerHTML='';
+  sorted.forEach((s,idx)=>{
+    const tr=document.createElement('tr'); if(s.i===selected)tr.className='me';
+    tr.innerHTML=`<td style="font-size:24px">${idx+1}</td><td>${drivers[s.i].face} <b>${drivers[s.i].name}</b></td><td>${s.pts} pts</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function showImpact(text,x=W*.5,y=H*.55){
+  const el=document.createElement('div');el.className='impact';el.textContent=text;
+  el.style.left=Math.max(8,Math.min(W-180,x-7
