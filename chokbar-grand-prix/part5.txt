@@ -1,0 +1,59 @@
+ }
+  ctx.restore();
+}
+
+function draw(){
+  const track=tracks[raceIndex]||tracks[0];
+  ctx.clearRect(0,0,W,H);
+  drawSky(track);
+  if(player){
+    drawBuildings(track);
+    drawRoad(track);
+    drawWorldCars(track);
+    drawPlayer(track);
+    drawSpeedLines();
+    comicTexture(.035);
+    if(flash>0){ctx.fillStyle=`rgba(255,255,255,${flash*.28})`;ctx.fillRect(0,0,W,H);}
+  }else{
+    ctx.fillStyle='#ffd62e';ctx.fillRect(0,H*.35,W,H*.65);comicTexture(.08);
+  }
+}
+
+function frame(t){
+  const dt=Math.min(.033,(t-lastT)/1000||0);lastT=t;
+  update(dt);draw();requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Keyboard
+addEventListener('keydown',e=>{
+  if(['ArrowLeft','ArrowRight',' ','a','d','A','D'].includes(e.key))e.preventDefault();
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')input.left=true;
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')input.right=true;
+  if(e.key===' ')input.boost=true;
+});
+addEventListener('keyup',e=>{
+  if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A')input.left=false;
+  if(e.key==='ArrowRight'||e.key==='d'||e.key==='D')input.right=false;
+  if(e.key===' ')input.boost=false;
+});
+
+// Touch / pointer controls
+document.querySelectorAll('.ctrl').forEach(el=>{
+  const key=el.dataset.control;
+  const down=e=>{e.preventDefault();input[key]=true;el.classList.add('down');initAudio();};
+  const up=e=>{e.preventDefault();input[key]=false;el.classList.remove('down');};
+  el.addEventListener('pointerdown',down);
+  el.addEventListener('pointerup',up);
+  el.addEventListener('pointercancel',up);
+  el.addEventListener('pointerleave',up);
+});
+addEventListener('blur',()=>{input.left=input.right=input.boost=false});
+
+// Prevent context menu on long press
+document.addEventListener('contextmenu',e=>e.preventDefault());
+
+})();
+</script>
+</body>
+</html>
