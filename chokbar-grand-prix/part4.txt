@@ -1,0 +1,134 @@
+lices;i++){
+    const d1=i/slices,d2=(i+1)/slices;
+    const p1=Math.pow(d1,1.58),p2=Math.pow(d2,1.58);
+    const y1=horizon+p1*(H-horizon),y2=horizon+p2*(H-horizon);
+    const half1=W*(.045+.54*d1),half2=W*(.045+.54*d2);
+    const c1=roadCenterFor(d1,player.dist,track),c2=roadCenterFor(d2,player.dist,track);
+
+    const band=(Math.floor((player.dist*.09)+(1-d1)*92)%2===0);
+    ctx.fillStyle=band?'#2d3034':'#34373c';
+    ctx.beginPath();ctx.moveTo(c1-half1,y1);ctx.lineTo(c1+half1,y1);ctx.lineTo(c2+half2,y2);ctx.lineTo(c2-half2,y2);ctx.closePath();ctx.fill();
+
+    // sidewalks
+    ctx.fillStyle=band?'#e4e0d5':'#cfc9b9';
+    ctx.beginPath();ctx.moveTo(c1-half1*1.10,y1);ctx.lineTo(c1-half1,y1);ctx.lineTo(c2-half2,y2);ctx.lineTo(c2-half2*1.10,y2);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(c1+half1,y1);ctx.lineTo(c1+half1*1.10,y1);ctx.lineTo(c2+half2*1.10,y2);ctx.lineTo(c2+half2,y2);ctx.closePath();ctx.fill();
+
+    // edge ink
+    if(i%4===0){ctx.strokeStyle='#111';ctx.lineWidth=Math.max(1,d1*4);ctx.beginPath();ctx.moveTo(c2-half2,y2);ctx.lineTo(c2-half2*1.10,y2);ctx.stroke();ctx.beginPath();ctx.moveTo(c2+half2,y2);ctx.lineTo(c2+half2*1.10,y2);ctx.stroke();}
+
+    // lane markers
+    if((Math.floor((player.dist*.11)+(1-d1)*110))%8<4){
+      ctx.fillStyle='#f4f1cf';
+      for(let lane=-1;lane<=1;lane++){
+        const frac=lane/2;
+        const lx1=c1+half1*frac,lx2=c2+half2*frac;
+        const w1=Math.max(.5,d1*3),w2=Math.max(.7,d2*3);
+        ctx.beginPath();ctx.moveTo(lx1-w1,y1);ctx.lineTo(lx1+w1,y1);ctx.lineTo(lx2+w2,y2);ctx.lineTo(lx2-w2,y2);ctx.closePath();ctx.fill();
+      }
+    }
+  }
+
+  // finish banner near end
+  const rem=track.length-player.dist;
+  if(rem>0&&rem<1000){
+    const depth=1-rem/1000;
+    const p=Math.pow(depth,1.58);
+    const y=horizon+p*(H-horizon);
+    const half=W*(.045+.54*depth);
+    const c=roadCenterFor(depth,player.dist,track);
+    ctx.strokeStyle='#111';ctx.lineWidth=Math.max(2,depth*8);
+    ctx.beginPath();ctx.moveTo(c-half*.9,y);ctx.lineTo(c+half*.9,y);ctx.stroke();
+    if(depth>.2){
+      ctx.fillStyle='#fff';ctx.font=`${Math.max(10,depth*30)}px Impact`;ctx.textAlign='center';ctx.strokeStyle='#111';ctx.lineWidth=5;
+      ctx.strokeText('ARRIVÉE',c,y-8);ctx.fillText('ARRIVÉE',c,y-8);
+    }
+  }
+}
+
+function project(z,x,track){
+  const rel=z-player.dist;
+  if(rel<-55||rel>1080)return null;
+  const depth=1-Math.max(0,rel)/1080;
+  const p=Math.pow(depth,1.58);
+  const horizon=H*.29;
+  const y=horizon+p*(H-horizon);
+  const half=W*(.045+.54*depth);
+  const c=roadCenterFor(depth,player.dist,track);
+  const scale=.18+depth*1.06;
+  return {x:c+x*half*.86,y,scale,depth};
+}
+
+function drawCarAt(px,py,scale,color,accent,trafficCar=false){
+  const w=56*scale,h=84*scale;
+  ctx.save();ctx.translate(px,py);ctx.lineJoin='round';
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,.28)';ctx.beginPath();ctx.ellipse(0,h*.35,w*.55,h*.18,0,0,Math.PI*2);ctx.fill();
+  // body
+  ctx.fillStyle=color;ctx.strokeStyle='#111';ctx.lineWidth=Math.max(2,4*scale);
+  ctx.beginPath();
+  ctx.moveTo(-w*.38,h*.42);ctx.lineTo(-w*.49,h*.12);ctx.lineTo(-w*.37,-h*.38);
+  ctx.lineTo(-w*.20,-h*.50);ctx.lineTo(w*.20,-h*.50);ctx.lineTo(w*.37,-h*.38);ctx.lineTo(w*.49,h*.12);ctx.lineTo(w*.38,h*.42);ctx.closePath();ctx.fill();ctx.stroke();
+  // rear glass
+  ctx.fillStyle='#253949';ctx.beginPath();ctx.moveTo(-w*.25,-h*.23);ctx.lineTo(-w*.16,-h*.41);ctx.lineTo(w*.16,-h*.41);ctx.lineTo(w*.25,-h*.23);ctx.closePath();ctx.fill();ctx.stroke();
+  // spoiler
+  if(!trafficCar){
+    ctx.fillStyle=accent;ctx.fillRect(-w*.52,-h*.48,w*1.04,h*.07);ctx.strokeRect(-w*.52,-h*.48,w*1.04,h*.07);
+  }
+  // stripe
+  ctx.fillStyle=accent;ctx.fillRect(-w*.07,-h*.18,w*.14,h*.5);
+  // tail lights
+  ctx.fillStyle='#ff2a2a';ctx.fillRect(-w*.33,h*.18,w*.18,h*.08);ctx.fillRect(w*.15,h*.18,w*.18,h*.08);
+  // bumper
+  ctx.fillStyle='#111';ctx.fillRect(-w*.38,h*.31,w*.76,h*.06);
+  ctx.restore();
+}
+
+function drawWorldCars(track){
+  const items=[];
+  traffic.forEach(t=>{const p=project(t.dist,t.x,track);if(p)items.push({p,t,type:'traffic'})});
+  racers.forEach(r=>{const p=project(r.dist,r.x,track);if(p)items.push({p,r,type:'racer'})});
+  items.sort((a,b)=>a.p.depth-b.p.depth);
+  items.forEach(it=>{
+    if(it.type==='traffic')drawCarAt(it.p.x,it.p.y,it.p.scale*.72,it.t.color,'#111',true);
+    else{
+      const d=drivers[it.r.driver];
+      drawCarAt(it.p.x,it.p.y,it.p.scale*.78,d.car,d.accent,false);
+      if(it.p.scale>.38){
+        ctx.font=`${Math.max(9,10*it.p.scale)}px Impact`;ctx.textAlign='center';ctx.fillStyle='#fff';ctx.strokeStyle='#111';ctx.lineWidth=3;
+        const name=d.name.split(' ')[0].toUpperCase();ctx.strokeText(name,it.p.x,it.p.y-58*it.p.scale);ctx.fillText(name,it.p.x,it.p.y-58*it.p.scale);
+      }
+    }
+  });
+}
+
+function drawPlayer(track){
+  if(!player)return;
+  const roadHalf=W*.54;
+  const curveLean=(curveAt(player.dist+200,track)-curveAt(player.dist,track))*16;
+  const x=W*.5+player.x*roadHalf*.72+curveLean;
+  const y=H*.79;
+  ctx.save();
+  if(shake>0){ctx.translate((Math.random()-.5)*shake*18,(Math.random()-.5)*shake*12)}
+  const d=drivers[player.driver];
+  drawCarAt(x,y,1.18,d.car,d.accent,false);
+  // exhaust / boost flames
+  if(input.boost&&player.boost>0&&state==='race'){
+    for(let i=0;i<2;i++){
+      ctx.fillStyle=i===0?'#fff44a':'#29a7ff';
+      ctx.beginPath();ctx.moveTo(x+(i?14:-14),y+42);ctx.lineTo(x+(i?9:-9),y+66+Math.random()*18);ctx.lineTo(x+(i?19:-19),y+42);ctx.fill();
+      ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawSpeedLines(){
+  if(!player||state!=='race'||!(input.boost&&player.boost>0))return;
+  ctx.save();ctx.strokeStyle='rgba(255,255,255,.62)';ctx.lineWidth=3;
+  const cx=W*.5,cy=H*.45;
+  for(let i=0;i<18;i++){
+    const a=(i/18)*Math.PI*2+player.dist*.01;
+    const r1=Math.min(W,H)*.25,r2=r1+60+Math.random()*100;
+    ctx.beginPath();ctx.moveTo(cx+Math.cos(a)*r1,cy+Math.sin(a)*r1);ctx.lineTo(cx+Math.cos(a)*r2,cy+Math.sin(a)*r2);ctx.stroke();
+ 
