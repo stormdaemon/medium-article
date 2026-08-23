@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f4c430">
+<title>CHOKBAR GRAND PRIX</title>
+<style>
+  :root{
+    --ink:#111;
+    --paper:#f4efe1;
+    --yellow:#ffd62e;
+    --red:#ff3a2f;
+    --blue:#29a7ff;
+    --green:#53df77;
+    --panel:rgba(250,246,233,.94);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#111;font-family:Impact,Haettenschweiler,"Arial Narrow Bold",system-ui,sans-serif}
+  body{touch-action:none}
+  #game{position:fixed;inset:0;width:100%;height:100%;display:block;background:#88cfff}
+  .screen{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:16px;z-index:20;background:
+    radial-gradient(circle at 18% 22%,rgba(0,0,0,.16) 0 1px,transparent 1.5px) 0 0/8px 8px,
+    linear-gradient(135deg,rgba(255,214,46,.94),rgba(255,95,54,.94));}
+  .screen.show{display:flex}
+  .panel{width:min(920px,100%);max-height:92vh;overflow:auto;background:var(--panel);border:5px solid var(--ink);box-shadow:10px 10px 0 var(--ink);padding:18px;position:relative}
+  .title{margin:0;text-transform:uppercase;font-size:clamp(40px,10vw,92px);line-height:.82;letter-spacing:-2px;transform:rotate(-1deg);text-shadow:4px 4px 0 #fff,8px 8px 0 var(--ink)}
+  .subtitle{font:900 14px/1.2 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.18em;margin:18px 0 10px}
+  .comic-rule{height:7px;background:var(--ink);margin:14px 0}
+  .drivers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .driver{border:3px solid var(--ink);background:#fff;padding:9px;min-height:100px;position:relative;cursor:pointer;box-shadow:4px 4px 0 var(--ink)}
+  .driver.selected{background:var(--yellow);transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
+  .driver .face{font-size:32px;float:left;margin-right:7px;filter:saturate(1.15)}
+  .driver .name{font-size:18px;line-height:1;text-transform:uppercase}
+  .driver .tag{font:700 10px/1.2 system-ui,sans-serif;margin-top:6px}
+  .bars{clear:both;padding-top:7px}
+  .bar{height:7px;background:#ddd;border:1px solid #111;margin:4px 0;overflow:hidden}
+  .bar i{display:block;height:100%;background:#111}
+  .buttons{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+  button{font:900 18px/1 Impact,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;border:4px solid #111;background:#fff;padding:14px 18px;box-shadow:5px 5px 0 #111;cursor:pointer}
+  button.primary{background:var(--yellow)}
+  button:active{transform:translate(3px,3px);box-shadow:2px 2px 0 #111}
+  .tiny{font:700 12px/1.4 system-ui,sans-serif}
+  #hud{position:fixed;inset:0;z-index:10;display:none;pointer-events:none;color:#fff;text-shadow:2px 2px 0 #111}
+  #hud.show{display:block}
+  .hudTop{position:absolute;left:10px;right:10px;top:max(10px,env(safe-area-inset-top));display:flex;justify-content:space-between;gap:8px}
+  .badge{background:rgba(17,17,17,.82);border:3px solid #fff;padding:7px 9px;box-shadow:3px 3px 0 #111;min-width:94px}
+  .badge strong{font-size:24px}
+  .badge small{display:block;font:800 10px/1 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase}
+  .boostWrap{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100px + env(safe-area-inset-bottom));width:min(54vw,340px);height:25px;background:#111;border:3px solid #fff;box-shadow:3px 3px 0 #111}
+  .boostFill{height:100%;width:0;background:linear-gradient(90deg,#29a7ff,#fff44a,#ff3a2f);transition:width .08s linear}
+  .boostLabel{position:absolute;inset:0;text-align:center;font-size:15px;line-height:20px}
+  .controls{position:fixed;left:0;right:0;bottom:max(10px,env(safe-area-inset-bottom));display:none;justify-content:space-between;align-items:end;padding:0 14px;z-index:14;pointer-events:none}
+  .controls.show{display:flex}
+  .ctrlGroup{display:flex;gap:12px;pointer-events:auto}
+  .ctrl{width:72px;height:72px;border-radius:50%;border:4px solid #111;background:rgba(255,255,255,.82);box-shadow:5px 5px 0 #111;display:grid;place-items:center;font-size:30px;user-select:none}
+  .ctrl.boost{width:88px;height:88px;background:var(--yellow);font-size:17px;text-align:center}
+  .ctrl.down{transform:translate(3px,3px);box-shadow:2px 2px 0 #111}
+  #impactLayer{position:fixed;inset:0;z-index:13;pointer-events:none;overflow:hidden}
+  .impact{position:absolute;font-size:clamp(46px,13vw,105px);color:#fff;text-shadow:4px 4px 0 #111,-3px -3px 0 #111;animation:pop .72s ease-out forwards;transform:rotate(-10deg)}
+  @keyframes pop{0%{opacity:0;scale:.3}20%{opacity:1;scale:1.15}100%{opacity:0;scale:1.7;translate:0 -80px}}
+  #countdown{position:fixed;inset:0;display:none;place-items:center;z-index:15;pointer-events:none;font-size:min(35vw,220px);color:#fff;text-shadow:8px 8px 0 #111}
+  #countdown.show{display:grid}
+  .resultsTable{width:100%;border-collapse:collapse;font:800 14px/1.2 system-ui,sans-serif}
+  .resultsTable th,.resultsTable td{padding:8px;border-bottom:2px solid #111;text-align:left}
+  .resultsTable tr.me{background:var(--yellow)}
+  .bigPlace{font-size:72px;line-height:.8;margin:0}
+  .gpDots{display:flex;gap:5px;margin:9px 0}
+  .gpDots i{height:12px;flex:1;border:2px solid #111;background:#fff}
+  .gpDots i.done{background:#111}
+  .help{position:absolute;right:12px;bottom:10px;color:#fff;font:700 11px/1.3 system-ui,sans-serif;text-align:right;opacity:.75}
+  @media(max-width:650px){
+    .panel{padding:13px;border-width:4px;box-shadow:7px 7px 0 #111}
+    .drivers{grid-template-columns:repeat(2,1fr)}
+    .driver{min-height:92px}
+    .buttons button{flex:1}
+    .help{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="menu" class="screen show">
+  <div class="panel">
+    <h1 class="title">CHOKBAR<br>GRAND PRIX</h1>
+    <div class="subtitle">5 courses • 12 pilotes • zéro dignité mécanique</div>
+    
