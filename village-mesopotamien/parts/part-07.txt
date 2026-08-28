@@ -1,0 +1,65 @@
+e:false}));sp.position.set(x,y,z);sp.scale.set(1.5,1.5,1);scene.add(sp);arr.push({sp,life:i/10,seed:range(0,TAU)});}smokeSystems.push({x,z,y,arr});}
+    [[-39,46,8],[-35,-28,7],[38,35,9],[35,-45,7],[-18,-60,8]].forEach(p=>chimneySmoke(...p));
+    animators.push((dt,t)=>smokeSystems.forEach(s=>s.arr.forEach(p=>{p.life=(p.life+dt*.08)%1;const l=p.life;p.sp.position.set(s.x+Math.sin(t*.35+p.seed)*l*2.2,s.y+l*12,s.z+Math.cos(t*.28+p.seed)*l*1.2);p.sp.scale.setScalar(.7+l*4.3);p.sp.material.opacity=Math.sin(l*Math.PI)*.18;})));
+
+    const dustCount=lowPower?700:1500,dustGeo=new THREE.BufferGeometry(),dustPos=new Float32Array(dustCount*3);
+    for(let i=0;i<dustCount;i++){dustPos[i*3]=range(-80,80);dustPos[i*3+1]=range(.2,12);dustPos[i*3+2]=range(-80,80);}dustGeo.setAttribute('position',new THREE.BufferAttribute(dustPos,3));
+    const dustMat=new THREE.PointsMaterial({color:0xf3c47c,size:.055,transparent:true,opacity:.28,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true});const dust=new THREE.Points(dustGeo,dustMat);scene.add(dust);
+    animators.push((dt,t)=>{dust.rotation.y=t*.003;dust.position.x=Math.sin(t*.08)*2;});
+
+    // Foule instanciée : dizaines de personnages pour seulement quelques draw calls.
+    class Crowd {
+      constructor(count){
+        this.count=count;this.agents=[];
+        const makeInst=(geo,material)=>{const im=new THREE.InstancedMesh(geo,material,count);im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);im.castShadow=true;im.receiveShadow=true;scene.add(im);return im;};
+        const skinMaterial=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.78,vertexColors:true});
+        const clothMaterial=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.9,vertexColors:true});
+        const hairMaterial=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.95,vertexColors:true});
+        this.head=makeInst(new THREE.SphereGeometry(1,12,9),skinMaterial);
+        this.torso=makeInst(new THREE.CylinderGeometry(.72,1,1,9),clothMaterial);
+        this.skirt=makeInst(new THREE.CylinderGeometry(.68,1.15,1,9),clothMaterial);
+        this.armL=makeInst(new THREE.CapsuleGeometry(.16,.68,4,7),skinMaterial);this.armR=makeInst(new THREE.CapsuleGeometry(.16,.68,4,7),skinMaterial);
+        this.legL=makeInst(new THREE.CapsuleGeometry(.16,.7,4,7),skinMaterial);this.legR=makeInst(new THREE.CapsuleGeometry(.16,.7,4,7),skinMaterial);
+        this.hair=makeInst(new THREE.SphereGeometry(1,11,7,0,TAU,0,Math.PI*.58),hairMaterial);
+        this.beard=makeInst(new THREE.ConeGeometry(1,1,9),hairMaterial);
+        this.carry=makeInst(new THREE.TorusGeometry(.5,.12,5,12),new THREE.MeshStandardMaterial({color:0xb49357,roughness:1}));
+        const skins=[0x7d4a2f,0x955c39,0xb7774f,0xc88b60,0x6c3b29];const clothes=[0x8d2f27,0x315d55,0x294f6b,0xc07b34,0x68406f,0xb04e31,0xd2aa62,0x4c6642];const hairs=[0x24140e,0x3a2418,0x15100d,0x5a321d];
+        const paths=this.makePaths();
+        for(let i=0;i<count;i++){
+          const role=i<count*.68?'walker':(i<count*.9?'merchant':'child');const path=pick(paths);
+          const a={role,path,t:rand(),speed:role==='child'?range(.018,.028):range(.007,.015),phase:range(0,TAU),height:role==='child'?range(.67,.8):range(.9,1.08),heading:0,pos:new THREE.Vector3(),beard:rand()>.53&&role!=='child',carry:rand()>.72,anchor:new THREE.Vector3(range(-22,22),0,range(-20,24))};
+          if(role==='merchant'){const stall=stallPositions[(i*7)%stallPositions.length];a.anchor.set(stall[0]+range(-1.5,1.5),0,stall[1]+range(-1.5,1.5));}
+          this.agents.push(a);this.setColor(this.head,i,pick(skins));this.setColor(this.armL,i,pick(skins));this.setColor(this.armR,i,pick(skins));this.setColor(this.legL,i,pick(skins));this.setColor(this.legR,i,pick(skins));const c=pick(clothes);this.setColor(this.torso,i,c);this.setColor(this.skirt,i,THREE.ColorManagement.enabled?new THREE.Color(c).multiplyScalar(.8):c);const h=pick(hairs);this.setColor(this.hair,i,h);this.setColor(this.beard,i,h);
+        }
+        [this.head,this.armL,this.armR,this.legL,this.legR,this.torso,this.skirt,this.hair,this.beard].forEach(m=>{if(m.instanceColor)m.instanceColor.needsUpdate=true;});
+      }
+      setColor(mesh,i,c){mesh.setColorAt(i,new THREE.Color(c));}
+      makePaths(){
+        const p=(arr)=>new THREE.CatmullRomCurve3(arr.map(([x,z])=>new THREE.Vector3(x,0,z)),true,'catmullrom',.25);
+        return [
+          p([[-7,67],[-5,41],[-19,25],[-25,1],[-15,-21],[0,-31],[19,-20],[27,2],[17,27],[6,43]]),
+          p([[-30,54],[-14,38],[-5,21],[18,15],[20,-7],[2,-18],[-18,-8],[-28,15]]),
+          p([[28,56],[12,42],[2,28],[-8,12],[-3,-7],[14,-16],[29,-2],[26,22]]),
+          p([[-42,53],[-37,22],[-34,-5],[-38,-34],[-18,-52],[14,-51],[36,-37],[39,-8],[35,22],[39,49]]),
+          p([[-17,8],[-5,17],[9,14],[18,3],[9,-9],[-6,-12],[-18,-2]])
+        ];
+      }
+      part(mesh,i,rootMatrix,pos,rot,scale){
+        tempQ.setFromEuler(rot);tempM2.compose(pos,tempQ,scale);tempM.multiplyMatrices(rootMatrix,tempM2);mesh.setMatrixAt(i,tempM);
+      }
+      update(dt,t){
+        for(let i=0;i<this.count;i++){
+          const a=this.agents[i];let moving=a.role!=='merchant';let speed=a.speed;
+          if(moving){a.t=(a.t+dt*speed)%1;a.path.getPointAt(a.t,a.pos);const tan=a.path.getTangentAt(a.t,tempV);a.heading=Math.atan2(tan.x,tan.z);}else{a.pos.copy(a.anchor);a.heading=Math.atan2(-a.pos.x,2-a.pos.z)+Math.sin(t*.25+a.phase)*.15;}
+          const h=a.height,phase=t*(moving?8.5:2.1)+a.phase;const swing=moving?Math.sin(phase)*.65:Math.sin(phase)*.12;const bob=moving?Math.abs(Math.sin(phase))*0.045:Math.sin(phase)*.018;
+          dummy.position.set(a.pos.x,bob,a.pos.z);dummy.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),a.heading);dummy.scale.set(h,h,h);dummy.updateMatrix();const root=dummy.matrix;
+          this.part(this.torso,i,root,new THREE.Vector3(0,1.16,0),new THREE.Euler(0,0,0),new THREE.Vector3(.31,.48,.23));
+          this.part(this.skirt,i,root,new THREE.Vector3(0,.68,0),new THREE.Euler(0,0,0),new THREE.Vector3(.34,.5,.31));
+          this.part(this.head,i,root,new THREE.Vector3(0,1.78,0),new THREE.Euler(0,0,0),new THREE.Vector3(.22,.25,.21));
+          this.part(this.hair,i,root,new THREE.Vector3(0,1.86,-.02),new THREE.Euler(0,0,0),new THREE.Vector3(.225,.19,.22));
+          this.part(this.beard,i,root,new THREE.Vector3(0,1.62,.17),new THREE.Euler(Math.PI,0,0),a.beard?new THREE.Vector3(.13,.28,.11):new THREE.Vector3(.001,.001,.001));
+          const armBase=1.39,armZ=.01;
+          this.part(this.armL,i,root,new THREE.Vector3(-.34,armBase,armZ),new THREE.Euler(swing+(a.role==='merchant'?.55:0),0,-.08),new THREE.Vector3(.32,.52,.32));
+          this.part(this.armR,i,root,new THREE.Vector3(.34,armBase,armZ),new THREE.Euler(-swing+(a.role==='merchant'?-1.0:0),0,.08),new THREE.Vector3(.32,.52,.32));
+          this.part(this.legL,i,root,new THREE.Vector3(-.15,.18,0),new THREE.Euler(-swing*.7,0,0),new THREE.Vector3(.34,.55,.34));
+          this.part(this.legR
