@@ -1,0 +1,60 @@
+15+z*.55+p)*.055*edge+Math.sin(t*.75+z*2.1+p)*.025;a.setY(i,sag+wave);}a.needsUpdate=true;if((oi&3)===0)o.geometry.computeVertexNormals();});
+    });
+
+    function makeBasket(radius=.45,height=.35){
+      const profile=[new THREE.Vector2(.22,0),new THREE.Vector2(radius*.85,.03),new THREE.Vector2(radius,.12),new THREE.Vector2(radius*.92,height),new THREE.Vector2(radius*.78,height+.04)];
+      const b=mesh(new THREE.LatheGeometry(profile,14),new THREE.MeshStandardMaterial({color:0xb38a4f,roughness:1}));
+      for(let i=0;i<3;i++){const ring=mesh(new THREE.TorusGeometry(radius*(.82+i*.04),.025,5,18),mat.rope,0,.1+i*.1,0);ring.rotation.x=Math.PI/2;b.add(ring);}return b;
+    }
+
+    function fruitPile(parent,color,count=25,spread=.65,y=.36){
+      const material=new THREE.MeshStandardMaterial({color,roughness:.78});const geo=new THREE.IcosahedronGeometry(.085,1);const im=new THREE.InstancedMesh(geo,material,count);im.castShadow=true;
+      for(let i=0;i<count;i++){const a=rand()*TAU,r=Math.sqrt(rand())*spread;dummy.position.set(Math.cos(a)*r,y+range(0,.18)*(1-r/spread),Math.sin(a)*r);dummy.rotation.set(rand(),rand(),rand());dummy.scale.setScalar(range(.7,1.25));dummy.updateMatrix();im.setMatrixAt(i,dummy.matrix);}parent.add(im);
+    }
+
+    function makeSpiceBowl(color){
+      const g=new THREE.Group();const bowl=mesh(new THREE.SphereGeometry(.42,18,10,0,TAU,Math.PI*.52,Math.PI*.46),new THREE.MeshStandardMaterial({color:0x8c5431,roughness:.9}),0,.15,0);g.add(bowl);const heap=mesh(new THREE.SphereGeometry(.35,18,10,0,TAU,0,Math.PI*.52),new THREE.MeshStandardMaterial({color,roughness:1}),0,.28,0);heap.scale.y=.55;g.add(heap);return g;
+    }
+
+    const stallPositions=[[-17,24,.35],[-7,27,-.2],[5,27,.15],[17,22,-.45],[23,12,-1.25],[24,1,-1.55],[21,-11,-1.85],[13,-20,-2.7],[1,-23,3.05],[-11,-20,2.7],[-21,-12,2.0],[-24,0,1.55],[-22,12,1.15],[-10,13,.1],[10,12,3.1],[-2,1,.6],[10,-3,-.5],[-10,-5,2.6]];
+    const stallTypes=['dates','spice','pottery','textile','produce','metal'];
+    function makeStall(x,z,rot,type,index){
+      const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rot;
+      const poleGeo=new THREE.CylinderGeometry(.08,.11,3.5,7);for(const px of [-2,2])for(const pz of [-1.45,1.45])g.add(mesh(poleGeo,mat.wood,px,1.75,pz));
+      const canopy=dynamicCloth(4.7,3.5,tex.cloth[index%tex.cloth.length],false,index*.8);canopy.position.y=3.5;g.add(canopy);
+      const table=mesh(new RoundedBoxGeometry(3.5,.28,1.35,2,.08),mat.wood,0,1.02,.35);g.add(table);for(const px of [-1.45,1.45])for(const pz of [-.35,.85])g.add(mesh(new THREE.CylinderGeometry(.08,.1,1.05,6),mat.darkWood,px,.5,pz));
+      const shelf=mesh(new THREE.BoxGeometry(3.1,.12,1.05),mat.darkWood,0,.47,.35);g.add(shelf);
+      const fringeMat=new THREE.MeshStandardMaterial({color:index%2?0xd7a24d:0x923b2b,roughness:.9});for(let xx=-2.2;xx<=2.2;xx+=.28){const f=mesh(new THREE.ConeGeometry(.075,.38,4),fringeMat,xx,3.27,1.72);f.rotation.x=Math.PI;g.add(f);}
+      if(type==='dates'||type==='produce'){
+        for(let k=0;k<3;k++){const b=makeBasket(.42,.28);b.position.set(-1.1+k*1.1,1.23,.32);g.add(b);fruitPile(b,k===0?0x74321c:k===1?0x9d5c1c:0x71863a,18,.34,.28);}
+        const hanging=new THREE.Group();hanging.position.set(1.55,2.48,-1.3);for(let i=0;i<14;i++){const f=mesh(new THREE.SphereGeometry(.07,6,5),new THREE.MeshStandardMaterial({color:0x673016,roughness:.8}),Math.sin(i*.8)*.13,-i*.1,0);hanging.add(f);}g.add(hanging);
+      } else if(type==='spice'){
+        const cols=[0xc44a27,0xd5a51e,0x78452d,0x6c7e32,0xb96a1f];cols.forEach((c,k)=>{const b=makeSpiceBowl(c);b.position.set(-1.4+k*.7,1.15,.35);b.scale.setScalar(.78);g.add(b);});
+        for(let k=0;k<3;k++){const sack=mesh(new RoundedBoxGeometry(.65,.9,.5,4,.18),new THREE.MeshStandardMaterial({color:0xb28a58,roughness:1}),-1+k,.45,-.45);sack.rotation.z=range(-.15,.15);g.add(sack);}
+      } else if(type==='pottery'){
+        for(let k=0;k<6;k++){const j=makeJar(range(.17,.3),range(.38,.72),k+index);j.position.set(-1.45+k*.58,1.16,.33+range(-.15,.12));g.add(j);}for(let k=0;k<3;k++){const j=makeJar(.35,.75,k+3);j.position.set(-.9+k*.9,.02,-.55);g.add(j);}
+      } else if(type==='textile'){
+        for(let k=0;k<4;k++){const roll=mesh(new THREE.CylinderGeometry(.18,.18,1.15,12),new THREE.MeshStandardMaterial({map:tex.cloth[(index+k)%6],roughness:.8}),-1.2+k*.75,1.3,.35);roll.rotation.z=Math.PI/2;g.add(roll);}
+        const rug=dynamicCloth(2.7,1.9,tex.cloth[(index+2)%6],true,index);rug.rotation.x=Math.PI/2;rug.position.set(0,2.2,-1.47);g.add(rug);
+      } else if(type==='metal'){
+        for(let k=0;k<5;k++){const bowl=mesh(new THREE.SphereGeometry(.35-k*.025,18,8,0,TAU,Math.PI*.5,Math.PI*.5),k%2?mat.bronze:mat.copper,-1.25+k*.62,1.12,.35);bowl.rotation.x=Math.PI;bowl.scale.y=.35;g.add(bowl);}const blade=mesh(new THREE.BoxGeometry(.12,1.35,.08),mat.bronze,1.45,1.7,.2);blade.rotation.z=.45;g.add(blade);
+      }
+      const tablet=mesh(new RoundedBoxGeometry(.72,.52,.12,3,.08),mat.brickDark,0,2.75,1.52);g.add(tablet);for(let k=0;k<4;k++){const mark=mesh(new THREE.ConeGeometry(.035,.18,3),mat.gold,-.22+k*.15,2.77,1.59);mark.rotation.z=Math.PI/2;g.add(mark);}
+      scene.add(g);shadowTree(g);return g;
+    }
+    stallPositions.forEach((p,i)=>makeStall(p[0],p[1],p[2],stallTypes[i%stallTypes.length],i));
+
+    function makeBrazier(x,y,z,s=1){
+      const g=new THREE.Group();g.position.set(x,y,z);g.scale.setScalar(s);
+      const bowl=mesh(new THREE.SphereGeometry(.48,18,8,0,TAU,Math.PI*.5,Math.PI*.5),mat.bronze,0,.35,0);bowl.rotation.x=Math.PI;g.add(bowl);
+      const stand=mesh(new THREE.CylinderGeometry(.12,.22,.65,8),mat.bronze,0,.05,0);g.add(stand);
+      const flameGeo=new THREE.ConeGeometry(.17,.65,8);const flames=[];
+      for(let i=0;i<5;i++){const f=mesh(flameGeo,i%2?mat.flame:mat.ember,range(-.18,.18),.68+range(-.08,.18),range(-.18,.18));f.rotation.z=range(-.25,.25);g.add(f);flames.push(f);}
+      const light=new THREE.PointLight(0xff752b,4.5,9,2);light.position.y=.85;g.add(light);scene.add(g);fireSystems.push({g,flames,light,phase:range(0,TAU)});return g;
+    }
+    [[-27,34,0],[27,34,0],[-29,-28,0],[29,-28,0],[-7,7,0],[7,-9,0]].forEach(p=>makeBrazier(p[0],p[2],p[1],.72));
+    animators.push((dt,t)=>fireSystems.forEach(f=>{f.flames.forEach((q,i)=>{q.scale.y=.72+Math.sin(t*10+f.phase+i)*.28;q.position.x+=Math.sin(t*7+i)*.0008;q.rotation.z=Math.sin(t*6+i)*.18;});f.light.intensity=3.7+Math.sin(t*13+f.phase)*.7;}));
+
+    // Fumées de fours et poussière atmosphérique.
+    const smokeTex=canvasTexture(128,(ctx,s)=>{const g=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);g.addColorStop(0,'rgba(90,75,62,.42)');g.addColorStop(.45,'rgba(110,94,80,.2)');g.addColorStop(1,'rgba(110,100,90,0)');ctx.fillStyle=g;ctx.fillRect(0,0,s,s);},1,1,true);smokeTex.wrapS=smokeTex.wrapT=THREE.ClampToEdgeWrapping;
+    function chimneySmoke(x,z,y=7){const arr=[];for(let i=0;i<10;i++){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:smokeTex,transparent:true,opacity:0,depthWrit
