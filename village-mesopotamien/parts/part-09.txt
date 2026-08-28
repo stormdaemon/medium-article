@@ -1,0 +1,67 @@
+quency.exponentialRampToValueAtTime(360,now+.45);g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(.035,now+.012);g.gain.exponentialRampToValueAtTime(.0001,now+.75);o.connect(g).connect(master);o.start(now);o.stop(now+.8);setTimeout(bell,range(2800,7500));};bell();
+    }
+
+    // Caméra et contrôles.
+    const keys={};
+    addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyC')toggleCinematic();if(e.code==='ShiftLeft'||e.code==='ShiftRight')state.sprint=true;});
+    addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='ShiftLeft'||e.code==='ShiftRight')state.sprint=false;});
+    renderer.domElement.addEventListener('click',()=>{if(state.started&&!coarse&&!state.cinematic)renderer.domElement.requestPointerLock();});
+    addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement&&!state.cinematic){state.yaw-=e.movementX*.00225;state.pitch=clamp(state.pitch-e.movementY*.0021,-1.25,1.1);}});
+
+    function setupStick(zone,vector,look=false){
+      const knob=zone.querySelector('.knob');let id=null,startX=0,startY=0;
+      zone.addEventListener('pointerdown',e=>{id=e.pointerId;zone.setPointerCapture(id);startX=e.clientX;startY=e.clientY;});
+      zone.addEventListener('pointermove',e=>{if(e.pointerId!==id)return;const dx=e.clientX-startX,dy=e.clientY-startY,max=36,len=Math.hypot(dx,dy),s=len>max?max/len:1;knob.style.transform=`translate(${dx*s}px,${dy*s}px)`;if(look){state.yaw-=dx*.00012;state.pitch=clamp(state.pitch-dy*.0001,-1.2,1.0);startX=e.clientX;startY=e.clientY;vector.set(dx/max,dy/max);}else vector.set(clamp(dx/max,-1,1),clamp(dy/max,-1,1));});
+      const end=e=>{if(e.pointerId!==id)return;id=null;vector.set(0,0);knob.style.transform='';};zone.addEventListener('pointerup',end);zone.addEventListener('pointercancel',end);
+    }
+    setupStick($('#move-zone'),state.mobileMove,false);setupStick($('#look-zone'),state.mobileLook,true);
+    $('#run-mobile').addEventListener('pointerdown',()=>state.sprint=true);$('#run-mobile').addEventListener('pointerup',()=>state.sprint=false);$('#run-mobile').addEventListener('pointercancel',()=>state.sprint=false);
+
+    function resolveCollisions(pos){
+      const r=.35;for(const c of colliders){if(pos.x>c.minX-r&&pos.x<c.maxX+r&&pos.z>c.minZ-r&&pos.z<c.maxZ+r){const dl=Math.abs(pos.x-(c.minX-r)),dr=Math.abs((c.maxX+r)-pos.x),dt=Math.abs(pos.z-(c.minZ-r)),db=Math.abs((c.maxZ+r)-pos.z);const m=Math.min(dl,dr,dt,db);if(m===dl)pos.x=c.minX-r;else if(m===dr)pos.x=c.maxX+r;else if(m===dt)pos.z=c.minZ-r;else pos.z=c.maxZ+r;}}
+      pos.x=clamp(pos.x,-65,65);pos.z=clamp(pos.z,-76,75);
+    }
+
+    function updatePlayer(dt){
+      if(state.cinematic)return;
+      const f=(keys.KeyW||keys.KeyZ?1:0)-(keys.KeyS?1:0)-state.mobileMove.y;
+      const r=(keys.KeyD?1:0)-(keys.KeyA||keys.KeyQ?1:0)+state.mobileMove.x;
+      const move=new THREE.Vector3();if(f||r){const forward=new THREE.Vector3(-Math.sin(state.yaw),0,-Math.cos(state.yaw));const right=new THREE.Vector3(Math.cos(state.yaw),0,-Math.sin(state.yaw));move.addScaledVector(forward,f).addScaledVector(right,r).normalize();}
+      const targetSpeed=state.sprint?8.3:4.2;state.velocity.x=lerp(state.velocity.x,move.x*targetSpeed,1-Math.exp(-dt*10));state.velocity.z=lerp(state.velocity.z,move.z*targetSpeed,1-Math.exp(-dt*10));
+      const next=camera.position.clone().addScaledVector(state.velocity,dt);resolveCollisions(next);camera.position.x=next.x;camera.position.z=next.z;
+      const bob=(f||r)?Math.sin(performance.now()*.011*(state.sprint?1.45:1))*0.032:0;camera.position.y=lerp(camera.position.y,1.72+bob,1-Math.exp(-dt*12));camera.rotation.order='YXZ';camera.rotation.y=state.yaw;camera.rotation.x=state.pitch;
+    }
+
+    const cinematicCurve=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0,4.5,73),new THREE.Vector3(-18,3.5,48),new THREE.Vector3(-28,5.5,18),new THREE.Vector3(-12,4.2,-4),new THREE.Vector3(18,5,-14),new THREE.Vector3(29,7,18),new THREE.Vector3(7,10,32),new THREE.Vector3(-10,13,-18),new THREE.Vector3(0,18,-48),new THREE.Vector3(18,11,-28),new THREE.Vector3(7,5,12)
+    ],true,'catmullrom',.22);
+    let cinematicT=0;
+    function updateCinematic(dt,t){
+      if(!state.cinematic)return;cinematicT=(cinematicT+dt*.018)%1;const p=cinematicCurve.getPointAt(cinematicT),ahead=cinematicCurve.getPointAt((cinematicT+.018)%1);camera.position.lerp(p,1-Math.exp(-dt*3.5));const target=ahead.clone();target.y=lerp(target.y,3.2,.55);camera.lookAt(target);
+    }
+    function toast(text){const el=$('#toast');el.textContent=text;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1800);}
+    function toggleCinematic(){state.cinematic=!state.cinematic;if(state.cinematic){document.exitPointerLock?.();cinematicT=.02;toast('Visite cinématique activée');}else{state.yaw=camera.rotation.y;state.pitch=0;toast('Exploration libre');}}
+    $('#cinematic').onclick=toggleCinematic;$('#cinematic-mobile').onclick=toggleCinematic;
+
+    function applyQuality(){
+      const labels=['éco','équilibrée','élevée'];const q=state.quality;renderer.setPixelRatio(Math.min(devicePixelRatio,[.85,1.15,1.65][q]));renderer.shadowMap.enabled=q>0;sun.shadow.mapSize.set(q===2?2048:1024,q===2?2048:1024);bloom.enabled=q===2;$('#quality').textContent=`Qualité : ${labels[q]}`;toast(`Qualité ${labels[q]}`);
+    }
+    $('#quality').onclick=()=>{state.quality=(state.quality+1)%3;applyQuality();};applyQuality();
+    $('#sound').onclick=()=>{state.sound=!state.sound;createAudio();master.gain.setTargetAtTime(state.sound?.16:.0001,audioCtx.currentTime,.08);$('#sound').textContent=`Son : ${state.sound?'actif':'coupé'}`;toast(state.sound?'Ambiance activée':'Ambiance coupée');};
+
+    $('#start').onclick=()=>{
+      state.started=true;$('#loading').classList.add('hidden');$('#hud').classList.add('visible');
+      if(!coarse){setTimeout(()=>renderer.domElement.requestPointerLock(),250);}state.sound=true;createAudio();$('#sound').textContent='Son : actif';
+      state.cinematic=true;cinematicT=.99;setTimeout(()=>{if(state.cinematic)toast('C pour quitter la visite cinéma');},1100);
+    };
+
+    addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)clock.stop();else clock.start();});
+
+    function animate(){
+      requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04),t=clock.elapsedTime;for(const fn of animators)fn(dt,t);updatePlayer(dt);updateCinematic(dt,t);if(state.quality===2)composer.render();else renderer.render(scene,camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
