@@ -1,0 +1,153 @@
+ometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+    const coarse = matchMedia('(pointer:coarse)').matches;
+    const lowPower = coarse || navigator.hardwareConcurrency <= 4;
+    const $ = (s) => document.querySelector(s);
+    const clamp = THREE.MathUtils.clamp;
+    const lerp = THREE.MathUtils.lerp;
+    const TAU = Math.PI * 2;
+
+    // Reproductibilité : le même village est reconstruit à chaque ouverture.
+    let seed = 0x5EED1234;
+    const rand = () => {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    const range = (a,b) => a + (b-a)*rand();
+    const pick = (a) => a[(rand()*a.length)|0];
+
+    const state = {
+      started:false,
+      cinematic:false,
+      quality: lowPower ? 1 : 2,
+      sound:false,
+      yaw:Math.PI,
+      pitch:-0.08,
+      velocity:new THREE.Vector3(),
+      grounded:true,
+      verticalVelocity:0,
+      sprint:false,
+      mobileMove:new THREE.Vector2(),
+      mobileLook:new THREE.Vector2()
+    };
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xd5a76b);
+    scene.fog = new THREE.FogExp2(0xc69a62, lowPower ? 0.0047 : 0.0037);
+
+    const camera = new THREE.PerspectiveCamera(64, innerWidth/innerHeight, 0.08, 520);
+    camera.position.set(0, 1.72, 70);
+
+    const renderer = new THREE.WebGLRenderer({antialias:!lowPower, powerPreference:'high-performance'});
+    renderer.setSize(innerWidth,innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, lowPower ? 1.15 : 1.65));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.06;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.prepend(renderer.domElement);
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene,camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.25,0.8,0.92);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+
+    const clock = new THREE.Clock();
+    const animators = [];
+    const colliders = [];
+    const dynamicCloths = [];
+    const fireSystems = [];
+    const smokeSystems = [];
+    const palmCrowns = [];
+    const tempV = new THREE.Vector3();
+    const tempV2 = new THREE.Vector3();
+    const tempQ = new THREE.Quaternion();
+    const tempM = new THREE.Matrix4();
+    const tempM2 = new THREE.Matrix4();
+    const dummy = new THREE.Object3D();
+
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    function canvasTexture(size, draw, repeatX=1, repeatY=1, srgb=true){
+      const c = document.createElement('canvas'); c.width=c.height=size;
+      const ctx=c.getContext('2d',{willReadFrequently:false});
+      draw(ctx,size);
+      const t=new THREE.CanvasTexture(c);
+      if(srgb) t.colorSpace=THREE.SRGBColorSpace;
+      t.wrapS=t.wrapT=THREE.RepeatWrapping;
+      t.repeat.set(repeatX,repeatY);
+      t.anisotropy=Math.min(maxAniso,8);
+      t.needsUpdate=true;
+      return t;
+    }
+
+    function makeSandTexture(){
+      return canvasTexture(512,(ctx,s)=>{
+        const img=ctx.createImageData(s,s);
+        for(let i=0;i<img.data.length;i+=4){
+          const n=178 + Math.random()*38;
+          img.data[i]=n+19; img.data[i+1]=n; img.data[i+2]=n-42; img.data[i+3]=255;
+        }
+        ctx.putImageData(img,0,0);
+        ctx.globalAlpha=.32;
+        for(let i=0;i<1800;i++){
+          const x=Math.random()*s,y=Math.random()*s,r=Math.random()*1.7;
+          ctx.fillStyle=Math.random()>.5?'#f1c98b':'#8f663e';ctx.beginPath();ctx.arc(x,y,r,0,TAU);ctx.fill();
+        }
+        ctx.globalAlpha=.12;
+        for(let i=0;i<42;i++){
+          ctx.strokeStyle='#6d4f35';ctx.lineWidth=.6+Math.random();ctx.beginPath();
+          let x=Math.random()*s,y=Math.random()*s;ctx.moveTo(x,y);
+          for(let k=0;k<5;k++){x+=range(-8,8);y+=range(2,10);ctx.lineTo(x,y);}ctx.stroke();
+        }
+      },18,18);
+    }
+
+    function makeBrickTexture(bump=false){
+      return canvasTexture(768,(ctx,s)=>{
+        ctx.fillStyle=bump?'#777':'#b57b49';ctx.fillRect(0,0,s,s);
+        const bh=42,bw=96;
+        for(let row=0;row<Math.ceil(s/bh);row++){
+          const off=(row%2)*bw*.5;
+          for(let x=-bw;x<s+bw;x+=bw){
+            const xx=x+off,y=row*bh;
+            const g=ctx.createLinearGradient(xx,y,xx,y+bh);
+            if(bump){g.addColorStop(0,'#999');g.addColorStop(.18,'#8b8b8b');g.addColorStop(1,'#686868');}
+            else {g.addColorStop(0,'#c68b56');g.addColorStop(.28,'#b47a49');g.addColorStop(1,'#956239');}
+            ctx.fillStyle=g;ctx.fillRect(xx+2,y+2,bw-4,bh-4);
+            ctx.strokeStyle=bump?'#444':'rgba(75,42,23,.46)';ctx.lineWidth=3;ctx.strokeRect(xx+1,y+1,bw-2,bh-2);
+            if(Math.random()>.55){
+              ctx.strokeStyle=bump?'#555':'rgba(83,45,24,.36)';ctx.lineWidth=1;
+              ctx.beginPath();ctx.moveTo(xx+range(12,bw-12),y+3);ctx.lineTo(xx+range(12,bw-12),y+range(14,bh-5));ctx.lineTo(xx+range(12,bw-12),y+bh-3);ctx.stroke();
+            }
+          }
+        }
+        ctx.globalAlpha=bump?.18:.16;
+        for(let i=0;i<9000;i++){const v=bump?Math.floor(range(80,160)):'rgba(255,225,170,.35)';ctx.fillStyle=bump?`rgb(${v},${v},${v})`:v;ctx.fillRect(Math.random()*s,Math.random()*s,1,1);}
+      },4,3,!bump);
+    }
+
+    function makeWoodTexture(){
+      return canvasTexture(512,(ctx,s)=>{
+        const g=ctx.createLinearGradient(0,0,s,0);g.addColorStop(0,'#5b341d');g.addColorStop(.5,'#8a5732');g.addColorStop(1,'#4b2a19');ctx.fillStyle=g;ctx.fillRect(0,0,s,s);
+        for(let y=0;y<s;y+=32){ctx.strokeStyle='rgba(38,20,12,.42)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,y);for(let x=0;x<s;x+=20)ctx.lineTo(x,y+Math.sin(x*.045+y)*3);ctx.stroke();}
+        for(let i=0;i<90;i++){ctx.strokeStyle='rgba(240,177,99,.16)';ctx.beginPath();const y=Math.random()*s;ctx.moveTo(0,y);ctx.bezierCurveTo(s*.3,y+range(-8,8),s*.7,y+range(-8,8),s,y+range(-3,3));ctx.stroke();}
+      },3,2);
+    }
+
+    function makeClothTexture(index){
+      const palettes=[
+        ['#8f2f25','#d49a49','#f0d191'],['#193f57','#d8ab51','#e9dcc0'],['#6b2d61','#d06d3f','#e7c877'],
+        ['#305644','#c58d3e','#f0d7a3'],['#ac4d30','#263f62','#e8bd68'],['#48366e','#b85239','#e2c88b']
+      ];
+      const p=palettes[index%palettes.length];
+      return canvasTexture(512,(ctx,s)=>{
+        ctx.fillStyle=p[0];ctx.fillRect(0,0,s,s);
+        for(let y=0;y<s;y+=64){ctx.fillStyle=p[1];ctx.fillRect(0,y+12,s,15);ctx.fillStyle=p[2];ctx.fill
